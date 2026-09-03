@@ -1,0 +1,137 @@
+name: Verify ForkRoom post-judging candidate
+
+on:
+  push:
+    branches: [forkroom-post-judging-v1.1.0-post.1]
+    paths:
+      - forkroom-post-judging/**
+      - .github/workflows/forkroom-post-judging.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: forkroom-post-judging-v1.1.0-post.1
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Apply patch, run 35 tests, and package candidate
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out isolated lab branch
+        uses: actions/checkout@v6
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Clone frozen challenge source
+        run: |
+          git clone --depth 1 --branch v1.0.2 \
+            https://github.com/streetquant/forkroom-webmcp.git candidate
+
+      - name: Verify and apply candidate patch
+        run: |
+          set -euo pipefail
+          cat forkroom-post-judging/ForkRoom-v1.1.0-post.1.patch.xz.b64.part-* \
+            | base64 --decode \
+            | xz --decompress > forkroom-post-judging/ForkRoom-v1.1.0-post.1.patch
+          cd forkroom-post-judging
+          sha256sum --check ForkRoom-v1.1.0-post.1.patch.sha256
+          cd ../candidate
+          git config user.name 'ForkRoom Candidate CI'
+          git config user.email 'candidate-ci@users.noreply.github.com'
+          git am ../forkroom-post-judging/ForkRoom-v1.1.0-post.1.patch
+          test "$(node -p "require('./package.json').version")" = '1.1.0-post.1'
+          grep -q '9b42593ac2cb03d645cda5dc1dbb910fd859a0ac' CANDIDATE_MANIFEST.json
+
+      - name: Install exact dependencies
+        working-directory: candidate
+        run: npm ci
+
+      - name: Audit WebMCP authority and integrity contract
+        working-directory: candidate
+        run: node scripts/validate-webmcp.mjs
+
+      - name: Lint with zero warnings
+        working-directory: candidate
+        run: npm run lint
+
+      - name: Run deterministic tests
+        working-directory: candidate
+        run: npm test -- --reporter=verbose
+
+      - name: Build portable production application
+        working-directory: candidate
+        env:
+          VITE_BASE_PATH: ./
+        run: npm run build
+
+      - name: Build and boot self-contained artifact
+        working-directory: candidate
+        run: |
+          node scripts/build-standalone.mjs
+          node scripts/smoke-standalone.mjs
+
+      - name: Verify candidate-specific invariants
+        working-directory: candidate
+        run: |
+          set -euo pipefail
+          test "$(grep -Rhc '^[[:space:]]*it(' src --include='*.test.ts' --include='*.test.tsx' | awk '{s+=$1} END{print s}')" = '35'
+          test "$(grep -c 'expected_revision: expectedRevision' src/webmcp/protocol.ts)" = '7'
+          test "$(grep -c 'requireCurrentRevision(input, state)' src/webmcp/protocol.ts)" = '7'
+          grep -q "consequentialHint: metadata.mode === 'proposal'" src/webmcp/protocol.ts
+          grep -q 'model_revision_before' src/webmcp/protocol.ts
+          grep -q 'validateProposalPayload' src/domain/validation.ts
+          grep -q 'application shell rendered' scripts/smoke-standalone.mjs
+          git diff --check HEAD^ HEAD
+
+      - name: Package candidate and verification receipt
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/output"
+          bundle="$RUNNER_TEMP/ForkRoom-v1.1.0-post.1"
+          mkdir -p "$output" "$bundle/source" "$bundle/build"
+          git -C candidate archive --format=tar HEAD | tar -x -C "$bundle/source"
+          cp -a candidate/dist/. "$bundle/build/"
+          cp forkroom-post-judging/ForkRoom-v1.1.0-post.1.patch "$bundle/"
+          cp forkroom-post-judging/ForkRoom-v1.1.0-post.1.patch.sha256 "$bundle/"
+          {
+            echo 'ForkRoom v1.1.0-post.1 candidate CI receipt'
+            echo "Verified at: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo "Lab workflow run: $GITHUB_RUN_ID"
+            echo "Frozen base tag: v1.0.2"
+            echo 'Frozen base commit: 9b42593ac2cb03d645cda5dc1dbb910fd859a0ac'
+            echo "Candidate commit after patch: $(git -C candidate rev-parse HEAD)"
+            echo 'WebMCP tools: 16'
+            echo 'Proposal tools with expected_revision: 7'
+            echo 'Deterministic tests: 35'
+            echo 'Result: contract audit, lint, tests, build, standalone parse, and standalone boot passed'
+            echo 'Status: post-judging candidate; not the competition submission'
+          } > "$bundle/CANDIDATE_CI_RECEIPT.txt"
+          (
+            cd "$bundle"
+            find . -type f ! -name SHA256SUMS.txt -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          )
+          (
+            cd "$(dirname "$bundle")"
+            zip -X -q -r "$output/ForkRoom-v1.1.0-post.1-verified.zip" "$(basename "$bundle")"
+          )
+          (
+            cd "$output"
+            sha256sum ForkRoom-v1.1.0-post.1-verified.zip > ForkRoom-v1.1.0-post.1-verified.zip.sha256
+          )
+          echo "OUTPUT=$output" >> "$GITHUB_ENV"
+
+      - name: Upload verified candidate artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ForkRoom-v1.1.0-post.1-verified
+          path: |
+            ${{ env.OUTPUT }}/ForkRoom-v1.1.0-post.1-verified.zip
+            ${{ env.OUTPUT }}/ForkRoom-v1.1.0-post.1-verified.zip.sha256
+          if-no-files-found: error
+          retention-days: 90
