@@ -1,0 +1,1 @@
+Trigger the isolated ForkRoom v1.1.0-post.1 verification workflow after its definition exists on this branch.
