@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Apply patch, run 35 tests, and package candidate
+    name: Apply patches, run 35 tests, and package candidate
     runs-on: ubuntu-24.04
     steps:
       - name: Check out isolated lab branch
@@ -33,7 +33,7 @@ jobs:
           git clone --depth 1 --branch v1.0.2 \
             https://github.com/streetquant/forkroom-webmcp.git candidate
 
-      - name: Verify and apply candidate patch
+      - name: Verify and apply candidate patches
         run: |
           set -euo pipefail
           cat forkroom-post-judging/ForkRoom-v1.1.0-post.1.patch.xz.b64.part-* \
@@ -41,10 +41,12 @@ jobs:
             | xz --decompress > forkroom-post-judging/ForkRoom-v1.1.0-post.1.patch
           cd forkroom-post-judging
           sha256sum --check ForkRoom-v1.1.0-post.1.patch.sha256
+          sha256sum --check ForkRoom-v1.1.0-post.1-build-fix.patch.sha256
           cd ../candidate
           git config user.name 'ForkRoom Candidate CI'
           git config user.email 'candidate-ci@users.noreply.github.com'
           git am ../forkroom-post-judging/ForkRoom-v1.1.0-post.1.patch
+          git am ../forkroom-post-judging/ForkRoom-v1.1.0-post.1-build-fix.patch
           test "$(node -p "require('./package.json').version")" = '1.1.0-post.1'
           grep -q '9b42593ac2cb03d645cda5dc1dbb910fd859a0ac' CANDIDATE_MANIFEST.json
 
@@ -87,7 +89,7 @@ jobs:
           grep -q 'model_revision_before' src/webmcp/protocol.ts
           grep -q 'validateProposalPayload' src/domain/validation.ts
           grep -q 'application shell rendered' scripts/smoke-standalone.mjs
-          git diff --check HEAD^ HEAD
+          git diff --check HEAD~2 HEAD
 
       - name: Package candidate and verification receipt
         run: |
@@ -99,16 +101,19 @@ jobs:
           cp -a candidate/dist/. "$bundle/build/"
           cp forkroom-post-judging/ForkRoom-v1.1.0-post.1.patch "$bundle/"
           cp forkroom-post-judging/ForkRoom-v1.1.0-post.1.patch.sha256 "$bundle/"
+          cp forkroom-post-judging/ForkRoom-v1.1.0-post.1-build-fix.patch "$bundle/"
+          cp forkroom-post-judging/ForkRoom-v1.1.0-post.1-build-fix.patch.sha256 "$bundle/"
           {
             echo 'ForkRoom v1.1.0-post.1 candidate CI receipt'
             echo "Verified at: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
             echo "Lab workflow run: $GITHUB_RUN_ID"
             echo "Frozen base tag: v1.0.2"
             echo 'Frozen base commit: 9b42593ac2cb03d645cda5dc1dbb910fd859a0ac'
-            echo "Candidate commit after patch: $(git -C candidate rev-parse HEAD)"
+            echo "Candidate commit after patches: $(git -C candidate rev-parse HEAD)"
             echo 'WebMCP tools: 16'
             echo 'Proposal tools with expected_revision: 7'
             echo 'Deterministic tests: 35'
+            echo 'Patches: hardening candidate plus production-build narrowing fix'
             echo 'Result: contract audit, lint, tests, build, standalone parse, and standalone boot passed'
             echo 'Status: post-judging candidate; not the competition submission'
           } > "$bundle/CANDIDATE_CI_RECEIPT.txt"
