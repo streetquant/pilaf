@@ -1,0 +1,51 @@
+From 4c3893bccd07c5f70111902744f512e8ca2c441d Mon Sep 17 00:00:00 2001
+From: ForkRoom Hardening Lab <hardening-lab@users.noreply.github.com>
+Date: Thu, 3 Sep 2026 20:42:02 +0000
+Subject: [PATCH] fix: preserve validator type narrowing in production build
+
+---
+ src/domain/validation.ts | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/src/domain/validation.ts b/src/domain/validation.ts
+index af4741b..73772a5 100644
+--- a/src/domain/validation.ts
++++ b/src/domain/validation.ts
+@@ -497,14 +497,14 @@ export function validateDecisionState(value: unknown): DecisionStateValidation {
+   })
+   activity.forEach((entry, index) => validateActivity(entry, index, errors))
+ 
+-  const weightTotal = criteria.reduce((sum, candidate) => {
++  const weightTotal = criteria.reduce<number>((sum, candidate) => {
+     return isRecord(candidate) && typeof candidate.weight === 'number' && Number.isFinite(candidate.weight)
+       ? sum + Math.max(0, candidate.weight)
+       : sum
+   }, 0)
+   if (criteria.length > 0 && weightTotal <= 0) addError(errors, 'criteria', 'must contain at least one positive weight')
+ 
+-  const probabilityTotal = scenarios.reduce((sum, candidate) => {
++  const probabilityTotal = scenarios.reduce<number>((sum, candidate) => {
+     return isRecord(candidate) && typeof candidate.probability === 'number' && Number.isFinite(candidate.probability)
+       ? sum + Math.max(0, candidate.probability)
+       : sum
+@@ -522,14 +522,15 @@ export function validateDecisionState(value: unknown): DecisionStateValidation {
+   }
+   validateCommitment(value.commitment, errors, optionIds)
+   validateFiniteNumber(value.guidedStep, 'guidedStep', errors, 0, 10_000, true)
+-  const validRevision = validateFiniteNumber(value.revision, 'revision', errors, 1, Number.MAX_SAFE_INTEGER, true)
++  const revision = value.revision
++  const validRevision = validateFiniteNumber(revision, 'revision', errors, 1, Number.MAX_SAFE_INTEGER, true)
+   if (validRevision) {
+     proposals.forEach((proposal, index) => {
+       if (
+         isRecord(proposal) &&
+         typeof proposal.basedOnRevision === 'number' &&
+         Number.isFinite(proposal.basedOnRevision) &&
+-        proposal.basedOnRevision > value.revision
++        proposal.basedOnRevision > revision
+       ) {
+         addError(errors, `proposals[${index}].basedOnRevision`, 'cannot be newer than the snapshot revision')
+       }
+-- 
+2.47.3
+
