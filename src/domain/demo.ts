@@ -1,0 +1,177 @@
+import type { DecisionState } from './types'
+
+const SEEDED_AT = '2026-09-03T13:00:00.000Z'
+
+export const demoDecision: DecisionState = {
+  schemaVersion: 1,
+  id: 'harbor-city-heat-2027',
+  title: 'Harbor City · Heat resilience 2027',
+  question: 'How should Harbor City spend $12M before the 2027 heat season?',
+  context:
+    'Three summers of record heat have widened health and outage disparities. The council can fund one primary portfolio now, then adapt after the first season.',
+  horizon: 'Decision in 45 days · outcomes reviewed September 2027',
+  budget: '$12M capital envelope',
+  constraints: [
+    'At least 40% of benefits must reach the two highest-risk districts',
+    'Procurement must begin within 90 days',
+    'No option may depend on a single unverified funding source',
+  ],
+  criteria: [
+    {
+      id: 'lives',
+      name: 'Lives protected',
+      description: 'Expected reduction in severe heat illness and mortality.',
+      weight: 28,
+      direction: 'benefit',
+      unit: 'relative impact',
+    },
+    {
+      id: 'equity',
+      name: 'Equity',
+      description: 'Share of benefits reaching people with the highest exposure and least adaptive capacity.',
+      weight: 22,
+      direction: 'benefit',
+      unit: 'distribution score',
+    },
+    {
+      id: 'speed',
+      name: 'Deployment speed',
+      description: 'Probability of meaningful protection before the next heat season.',
+      weight: 18,
+      direction: 'benefit',
+      unit: 'readiness score',
+    },
+    {
+      id: 'resilience',
+      name: 'Outage resilience',
+      description: 'Ability to operate through grid stress or a multi-hour outage.',
+      weight: 18,
+      direction: 'benefit',
+      unit: 'continuity score',
+    },
+    {
+      id: 'learning',
+      name: 'Reversibility & learning',
+      description: 'Ability to test, measure, redirect, or stop without locking in the full budget.',
+      weight: 14,
+      direction: 'benefit',
+      unit: 'option value',
+    },
+  ],
+  options: [
+    {
+      id: 'cooling-commons',
+      name: 'Cooling Commons',
+      description: 'Convert libraries, schools, and faith centers into a neighborhood cooling network.',
+      thesis: 'Fast, trusted, and equitable protection with strong learning value.',
+      scores: { lives: 90, equity: 92, speed: 82, resilience: 55, learning: 88 },
+      scenarioImpacts: { prolonged: 8, outage: 3, mild: -3 },
+      assumptionExposure: { uptake: 80, matching: 15, procurement: 35, sms: 20 },
+    },
+    {
+      id: 'resilient-grid',
+      name: 'Resilient Grid',
+      description: 'Install solar-plus-storage microgrids at shelters, clinics, and emergency hubs.',
+      thesis: 'Durable infrastructure and exceptional outage performance, but slower delivery.',
+      scores: { lives: 78, equity: 62, speed: 45, resilience: 97, learning: 52 },
+      scenarioImpacts: { prolonged: 6, outage: 15, mild: -2 },
+      assumptionExposure: { uptake: 25, matching: 70, procurement: 85, sms: 5 },
+    },
+    {
+      id: 'home-shield',
+      name: 'Home Shield',
+      description: 'Target insulation, heat pumps, shade, and bill support to medically vulnerable homes.',
+      thesis: 'Deep household protection with balanced performance across futures.',
+      scores: { lives: 84, equity: 88, speed: 70, resilience: 74, learning: 73 },
+      scenarioImpacts: { prolonged: 8, outage: 8, mild: 1 },
+      assumptionExposure: { uptake: 65, matching: 40, procurement: 25, sms: 30 },
+    },
+    {
+      id: 'rapid-response',
+      name: 'Rapid Response Network',
+      description: 'Deploy outreach teams, transport, sensors, wellness checks, and emergency supplies.',
+      thesis: 'Maximum speed and adaptability, dependent on reliable outreach channels.',
+      scores: { lives: 70, equity: 80, speed: 95, resilience: 65, learning: 94 },
+      scenarioImpacts: { prolonged: 5, outage: 10, mild: 2 },
+      assumptionExposure: { uptake: 35, matching: 10, procurement: 20, sms: 88 },
+    },
+  ],
+  scenarios: [
+    {
+      id: 'prolonged',
+      name: 'Prolonged heatwave',
+      description: 'Fourteen consecutive days above the emergency threshold.',
+      probability: 45,
+      severity: 'high',
+    },
+    {
+      id: 'outage',
+      name: 'Heatwave + grid outage',
+      description: 'Peak heat coincides with a widespread eight-hour outage.',
+      probability: 25,
+      severity: 'extreme',
+    },
+    {
+      id: 'mild',
+      name: 'Mild summer',
+      description: 'Few emergency days; political pressure shifts toward visible near-term value.',
+      probability: 30,
+      severity: 'low',
+    },
+  ],
+  assumptions: [
+    {
+      id: 'uptake',
+      statement: 'Residents in the highest-risk districts will use city-supported services at the forecast rate.',
+      confidence: 58,
+      impact: 88,
+      evidence: 'Two pilot neighborhoods; participation varied by trusted local partner.',
+      challenged: false,
+    },
+    {
+      id: 'matching',
+      statement: 'Federal matching funds will arrive before major construction invoices are due.',
+      confidence: 42,
+      impact: 72,
+      evidence: 'Program announced; award schedule and allocation remain unconfirmed.',
+      challenged: false,
+    },
+    {
+      id: 'procurement',
+      statement: 'Microgrid and heat-pump procurement can clear within the 90-day mobilization constraint.',
+      confidence: 67,
+      impact: 65,
+      evidence: 'Vendor interviews support the schedule, but interconnection review is excluded.',
+      challenged: false,
+    },
+    {
+      id: 'sms',
+      statement: 'SMS and phone outreach can reliably reach isolated residents during an emergency.',
+      confidence: 81,
+      impact: 45,
+      evidence: 'Current opt-in list covers 78% of target households; language gaps remain.',
+      challenged: false,
+    },
+  ],
+  proposals: [],
+  activity: [
+    {
+      id: 'activity-seed',
+      actor: 'system',
+      kind: 'workspace-created',
+      message: 'ForkRoom seeded a decision model with four options, five values, three futures, and four explicit assumptions.',
+      at: SEEDED_AT,
+    },
+  ],
+  riskAversion: 0.62,
+  activeView: 'map',
+  selectedOptionId: 'cooling-commons',
+  commitment: null,
+  guidedStep: 0,
+  revision: 1,
+  updatedAt: SEEDED_AT,
+}
+
+export function createDemoDecision(): DecisionState {
+  return structuredClone(demoDecision)
+}

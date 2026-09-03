@@ -1,0 +1,149 @@
+{
+  "format": "forkroom-webmcp-catalog.v1",
+  "name": "ForkRoom",
+  "version": "1.1.0-post.1",
+  "description": "A live decision multiverse where people and browser agents construct, challenge, and stress-test consequential choices together.",
+  "runtimeApi": "document.modelContext",
+  "legacyRuntimeFallback": "navigator.modelContext",
+  "source": "https://github.com/streetquant/forkroom-webmcp",
+  "live": "https://raw.githack.com/streetquant/forkroom-webmcp/live/index.html",
+  "authorityBoundary": {
+    "agentMay": [
+      "inspect the current decision model",
+      "run side-effect-free comparisons and stress tests",
+      "navigate the visible workspace",
+      "stage structured proposals"
+    ],
+    "agentMayNot": [
+      "approve or reject its own proposal",
+      "silently alter decision inputs",
+      "convert a model score into a claim of causal truth"
+    ],
+    "humanMust": [
+      "approve or reject every substantive agent-authored mutation",
+      "own criterion weights, uncertainty caution, and final commitment"
+    ]
+  },
+  "tools": [
+    {
+      "name": "forkroom_inspect_decision",
+      "mode": "read",
+      "readOnly": true,
+      "consequential": false
+    },
+    {
+      "name": "forkroom_inspect_option",
+      "mode": "read",
+      "readOnly": true,
+      "consequential": false
+    },
+    {
+      "name": "forkroom_compare_options",
+      "mode": "read",
+      "readOnly": true,
+      "consequential": false
+    },
+    {
+      "name": "forkroom_find_fragile_assumptions",
+      "mode": "read",
+      "readOnly": true,
+      "consequential": false
+    },
+    {
+      "name": "forkroom_run_stress_test",
+      "mode": "read",
+      "readOnly": true,
+      "consequential": false
+    },
+    {
+      "name": "forkroom_find_rank_reversals",
+      "mode": "read",
+      "readOnly": true,
+      "consequential": false
+    },
+    {
+      "name": "forkroom_find_next_uncertainty",
+      "mode": "read",
+      "readOnly": true,
+      "consequential": false
+    },
+    {
+      "name": "forkroom_export_snapshot",
+      "mode": "read",
+      "readOnly": true,
+      "consequential": false
+    },
+    {
+      "name": "forkroom_focus_view",
+      "mode": "navigation",
+      "readOnly": false,
+      "consequential": false
+    },
+    {
+      "name": "forkroom_propose_option",
+      "mode": "proposal",
+      "readOnly": false,
+      "consequential": true,
+      "requiresExpectedRevision": true
+    },
+    {
+      "name": "forkroom_propose_criterion",
+      "mode": "proposal",
+      "readOnly": false,
+      "consequential": true,
+      "requiresExpectedRevision": true
+    },
+    {
+      "name": "forkroom_propose_assumption",
+      "mode": "proposal",
+      "readOnly": false,
+      "consequential": true,
+      "requiresExpectedRevision": true
+    },
+    {
+      "name": "forkroom_propose_future",
+      "mode": "proposal",
+      "readOnly": false,
+      "consequential": true,
+      "requiresExpectedRevision": true
+    },
+    {
+      "name": "forkroom_propose_score_change",
+      "mode": "proposal",
+      "readOnly": false,
+      "consequential": true,
+      "requiresExpectedRevision": true
+    },
+    {
+      "name": "forkroom_challenge_assumption",
+      "mode": "proposal",
+      "readOnly": false,
+      "consequential": true,
+      "requiresExpectedRevision": true
+    },
+    {
+      "name": "forkroom_draft_commitment",
+      "mode": "proposal",
+      "readOnly": false,
+      "consequential": true,
+      "requiresExpectedRevision": true
+    }
+  ],
+  "notice": "This catalog is a judge-readable companion file. Runtime tool discovery and invocation use the experimental WebMCP browser API.",
+  "releaseChannel": "post-judging-candidate",
+  "canonicalCompetitionRelease": "v1.0.2",
+  "executionReceipts": {
+    "fields": [
+      "invocation_id",
+      "effect",
+      "model_revision_before",
+      "model_revision_after",
+      "state_changed"
+    ],
+    "note": "Canonical revision changes are reported independently from presentation-only navigation."
+  },
+  "optimisticConcurrency": {
+    "proposalField": "expected_revision",
+    "rule": "All seven proposal tools reject stale revisions before staging."
+  }
+}

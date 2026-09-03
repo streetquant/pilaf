@@ -1,0 +1,21 @@
+{
+  "name": "ForkRoom",
+  "version": "1.1.0-post.1",
+  "channel": "post-judging-hardening-candidate",
+  "canonicalChallengeRelease": {
+    "tag": "v1.0.2",
+    "commit": "9b42593ac2cb03d645cda5dc1dbb910fd859a0ac",
+    "repository": "https://github.com/streetquant/forkroom-webmcp"
+  },
+  "mustNotReplaceJudgedArtifactDuringJudging": true,
+  "toolCount": 16,
+  "proposalToolCount": 7,
+  "deterministicTestCount": 35,
+  "hardening": [
+    "deep snapshot validation",
+    "optimistic expected_revision preconditions",
+    "proposal basedOnRevision provenance",
+    "invocation/effect/model-revision receipts",
+    "incubator-main consequentialHint annotations"
+  ]
+}

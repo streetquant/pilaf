@@ -1,0 +1,8 @@
+ForkRoom v1.1.0-post.1 post-judging source publication
+Frozen judged repository: https://github.com/streetquant/forkroom-webmcp
+Frozen base commit: 9b42593ac2cb03d645cda5dc1dbb910fd859a0ac
+Candidate commit: 035d56956b67b6ea83ae3565ba6c8c40852e491a
+Verification workflow: https://github.com/streetquant/pilaf/actions/runs/33804334746
+Tests: 35 passed
+Tool count: 16
+Status: post-judging candidate; not the competition submission
