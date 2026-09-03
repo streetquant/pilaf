@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: forkroom-post-judging-v1.1.0-post.1
@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Apply patches, run 35 tests, and package candidate
+    name: Apply patches, run 35 tests, publish, and package candidate
     runs-on: ubuntu-24.04
     steps:
       - name: Check out isolated lab branch
@@ -130,6 +130,56 @@ jobs:
             sha256sum ForkRoom-v1.1.0-post.1-verified.zip > ForkRoom-v1.1.0-post.1-verified.zip.sha256
           )
           echo "OUTPUT=$output" >> "$GITHUB_ENV"
+          echo "BUNDLE=$bundle" >> "$GITHUB_ENV"
+
+      - name: Publish verified candidate source branch
+        env:
+          LAB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          source_tree="$(mktemp -d)"
+          git -C candidate archive --format=tar HEAD | tar -x -C "$source_tree"
+          rm -rf "$source_tree/.github/workflows"
+          cat > "$source_tree/VERIFIED_PUBLICATION.txt" <<EOF
+          ForkRoom v1.1.0-post.1 post-judging source publication
+          Frozen judged repository: https://github.com/streetquant/forkroom-webmcp
+          Frozen base commit: 9b42593ac2cb03d645cda5dc1dbb910fd859a0ac
+          Candidate commit: $(git -C candidate rev-parse HEAD)
+          Verification workflow: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          Tests: 35 passed
+          Tool count: 16
+          Status: post-judging candidate; not the competition submission
+          EOF
+          git -C "$source_tree" init -b forkroom-v1.1.0-post.1-source
+          git -C "$source_tree" config user.name 'github-actions[bot]'
+          git -C "$source_tree" config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C "$source_tree" add -A
+          git -C "$source_tree" commit -m 'publish: ForkRoom v1.1.0-post.1 verified source'
+          git -C "$source_tree" remote add origin "https://x-access-token:${LAB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git -C "$source_tree" push --force origin HEAD:refs/heads/forkroom-v1.1.0-post.1-source
+
+      - name: Publish verified candidate live branch
+        env:
+          LAB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          live_tree="$(mktemp -d)"
+          cp -a candidate/dist/. "$live_tree/"
+          printf '%s\n' "$(git -C candidate rev-parse HEAD)" > "$live_tree/CANDIDATE_COMMIT"
+          printf '%s\n' '9b42593ac2cb03d645cda5dc1dbb910fd859a0ac' > "$live_tree/FROZEN_BASE_COMMIT"
+          cat > "$live_tree/README.txt" <<EOF
+          ForkRoom v1.1.0-post.1 verified post-judging live build
+          Source: https://github.com/$GITHUB_REPOSITORY/tree/forkroom-v1.1.0-post.1-source
+          Verification: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          This is not the frozen competition submission.
+          EOF
+          git -C "$live_tree" init -b forkroom-v1.1.0-post.1-live
+          git -C "$live_tree" config user.name 'github-actions[bot]'
+          git -C "$live_tree" config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C "$live_tree" add -A
+          git -C "$live_tree" commit -m 'deploy: ForkRoom v1.1.0-post.1 verified live build'
+          git -C "$live_tree" remote add origin "https://x-access-token:${LAB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git -C "$live_tree" push --force origin HEAD:refs/heads/forkroom-v1.1.0-post.1-live
 
       - name: Upload verified candidate artifact
         uses: actions/upload-artifact@v6
