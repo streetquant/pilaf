@@ -17,12 +17,8 @@ concurrency:
 
 jobs:
   verify-publish:
-    name: Reconstruct, verify, publish, and package post.2
+    name: Verify, publish, and package post.2
     runs-on: ubuntu-24.04
-    env:
-      SOURCE_BRANCH: forkroom-v1.1.0-post.2-source
-      LIVE_BRANCH: forkroom-v1.1.0-post.2-live
-      RELEASE_NAME: ForkRoom-v1.1.0-post.2
     steps:
       - name: Check out isolated release lab
         uses: actions/checkout@v6
@@ -35,240 +31,27 @@ jobs:
         with:
           node-version: 24
 
-      - name: Reconstruct and verify deterministic migrations
+      - name: Verify release-program integrity and syntax
         run: |
           set -euo pipefail
-          work="$RUNNER_TEMP/migration"
-          mkdir -p "$work"
-          cat forkroom-post2/apply_post2.py.xz.b64.part-* \
-            | base64 --decode \
-            | xz --decompress > "$work/apply_post2.py"
-          cp forkroom-post2/apply_post2.py.sha256 "$work/"
-          cp forkroom-post2/apply_post2_fix.py "$work/"
-          cp forkroom-post2/apply_post2_fix.py.sha256 "$work/"
           (
-            cd "$work"
-            sha256sum --check apply_post2.py.sha256
-            sha256sum --check apply_post2_fix.py.sha256
-            python -m py_compile apply_post2.py apply_post2_fix.py
+            cd forkroom-post2
+            sha256sum --check release_post2.sh.sha256
           )
-          echo "MIGRATION=$work/apply_post2.py" >> "$GITHUB_ENV"
-          echo "MIGRATION_FIX=$work/apply_post2_fix.py" >> "$GITHUB_ENV"
+          bash -n forkroom-post2/release_post2.sh
 
-      - name: Clone the verified post.1 source
-        run: |
-          set -euo pipefail
-          git clone --depth 1 --single-branch \
-            --branch forkroom-v1.1.0-post.1-source \
-            "https://github.com/$GITHUB_REPOSITORY.git" candidate
-          test "$(git -C candidate rev-parse HEAD)" = '1b2ee8fd3589c2b438f9760248ef631f552b4e4e'
-
-      - name: Apply post.2 standards and integrity upgrade
-        run: |
-          set -euo pipefail
-          python "$MIGRATION" candidate
-          python "$MIGRATION_FIX" candidate
-          test "$(node -p "require('./candidate/package.json').version")" = '1.1.0-post.2'
-          git -C candidate diff --check
-
-      - name: Install exact dependencies and assert audit receipt
-        working-directory: candidate
-        run: |
-          set -euo pipefail
-          npm ci --audit=true --audit-level=high 2>&1 | tee "$RUNNER_TEMP/npm-ci-audit.log"
-          grep -Eq 'found 0 vulnerabilities|0 vulnerabilities' "$RUNNER_TEMP/npm-ci-audit.log"
-          npm ls --all --json > "$RUNNER_TEMP/npm-dependency-tree.json"
-          test -s "$RUNNER_TEMP/npm-dependency-tree.json"
-
-      - name: Typecheck domain and WebMCP boundary
-        working-directory: candidate
-        run: |
-          npx tsc --noEmit \
-            --target ES2022 \
-            --module ESNext \
-            --moduleResolution Bundler \
-            --strict \
-            --skipLibCheck \
-            --lib ES2022,DOM \
-            src/domain/types.ts \
-            src/domain/analysis.ts \
-            src/domain/demo.ts \
-            src/domain/integrity.ts \
-            src/domain/validation.ts \
-            src/domain/reducer.ts \
-            src/webmcp/webmcp.d.ts \
-            src/webmcp/protocol.ts
-
-      - name: Audit WebMCP authority, result, and integrity contracts
-        working-directory: candidate
-        run: node scripts/validate-webmcp.mjs
-
-      - name: Lint with zero warnings
-        working-directory: candidate
-        run: npm run lint
-
-      - name: Run 45 deterministic tests
-        working-directory: candidate
-        run: |
-          set -euo pipefail
-          npm test -- --reporter=verbose
-          count="$(grep -Rhc '^[[:space:]]*it(' src --include='*.test.ts' --include='*.test.tsx' | awk '{sum += $1} END {print sum}')"
-          test "$count" = '45'
-          echo "Verified $count deterministic tests."
-
-      - name: Build portable production application
-        working-directory: candidate
+      - name: Run reproducible release program
         env:
-          VITE_BASE_PATH: ./
-        run: npm run build
-
-      - name: Build and boot self-contained application
-        working-directory: candidate
-        run: |
-          set -euo pipefail
-          node scripts/build-standalone.mjs
-          node scripts/smoke-standalone.mjs
-
-      - name: Verify post.2 release invariants
-        working-directory: candidate
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import { readFileSync } from 'node:fs'
-          const manifest = JSON.parse(readFileSync('public/.well-known/webmcp.json', 'utf8'))
-          const names = manifest.tools.map((tool) => tool.name)
-          if (manifest.version !== '1.1.0-post.2') throw new Error('manifest version mismatch')
-          if (names.length !== 17 || new Set(names).size !== 17) throw new Error('tool-count or uniqueness mismatch')
-          if (manifest.tools.filter((tool) => tool.readOnly).length !== 9) throw new Error('read-only count mismatch')
-          if (manifest.tools.filter((tool) => tool.mode === 'proposal').length !== 7) throw new Error('proposal count mismatch')
-          if (manifest.tools.some((tool) => tool.consequential)) throw new Error('reversible tools must not be marked consequential')
-          if (!names.includes('forkroom_verify_workspace')) throw new Error('workspace verifier missing')
-          if (manifest.optimisticConcurrency.approvalBinding !== 'basedOnModelDigest') throw new Error('approval digest binding missing')
-          NODE
-          test "$(grep -c 'basedOnModelDigest,' src/webmcp/protocol.ts)" = '7'
-          test "$(grep -c 'based_on_model_digest' src/webmcp/protocol.ts)" -ge '1'
-          grep -q "content: \[{ type: 'text', text }\]" src/webmcp/protocol.ts
-          grep -q "consequentialHint: false" src/webmcp/protocol.ts
-          grep -q 'const hash: number\[\]' src/domain/integrity.ts
-          grep -q 'forkroom:canonical-model:v1' src/domain/integrity.ts
-          grep -q 'forkroom:review-workspace:v1' src/domain/integrity.ts
-          grep -q 'Canonical model changed after this proposal was staged' src/domain/reducer.ts
-          grep -q 'workspace verifier accepts the seeded graph' scripts/smoke-standalone.mjs
-          test -s dist/standalone.html
-          grep -q 'forkroom_verify_workspace' dist/standalone.html
-
-      - name: Commit verified source candidate
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          git -C candidate config user.name 'github-actions[bot]'
-          git -C candidate config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git -C candidate add -A
-          git -C candidate commit -m 'release: ForkRoom v1.1.0-post.2 standards and integrity'
-          candidate_sha="$(git -C candidate rev-parse HEAD)"
-          printf '%s\n' "$candidate_sha" > "$RUNNER_TEMP/candidate-sha"
-          git -C candidate remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git -C candidate push --force origin "HEAD:refs/heads/$SOURCE_BRANCH"
-          echo "CANDIDATE_SHA=$candidate_sha" >> "$GITHUB_ENV"
-
-      - name: Publish verified live branch
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          live="$RUNNER_TEMP/live"
-          mkdir -p "$live"
-          cp -a candidate/dist/. "$live/"
-          printf '%s\n' "$CANDIDATE_SHA" > "$live/SOURCE_COMMIT"
-          printf '%s\n' '1b2ee8fd3589c2b438f9760248ef631f552b4e4e' > "$live/BASE_SOURCE_COMMIT"
-          cat > "$live/PUBLICATION_RECEIPT.txt" <<EOF
-          ForkRoom v1.1.0-post.2 verified live publication
-          Source repository: https://github.com/$GITHUB_REPOSITORY
-          Source branch: $SOURCE_BRANCH
-          Source commit: $CANDIDATE_SHA
-          Verification run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
-          WebMCP tools: 17
-          Deterministic tests: 45
-          Dependency install audit: 0 vulnerabilities
-          Result contract: structured content text envelope
-          Integrity: domain-separated SHA-256 model and review digests
-          Human authority: proposal approval unavailable to WebMCP tools
-          Status: post-judging continuation; not the frozen competition submission
-          EOF
-          git -C "$live" init -b "$LIVE_BRANCH"
-          git -C "$live" config user.name 'github-actions[bot]'
-          git -C "$live" config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git -C "$live" add -A
-          git -C "$live" commit -m "deploy: ForkRoom v1.1.0-post.2 from $CANDIDATE_SHA"
-          git -C "$live" remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git -C "$live" push --force origin "HEAD:refs/heads/$LIVE_BRANCH"
-
-      - name: Assemble self-verifying release archive
-        run: |
-          set -euo pipefail
-          output="$RUNNER_TEMP/output"
-          bundle="$RUNNER_TEMP/$RELEASE_NAME"
-          mkdir -p "$output" "$bundle/source" "$bundle/build"
-          git -C candidate archive --format=tar HEAD | tar -x -C "$bundle/source"
-          cp -a candidate/dist/. "$bundle/build/"
-          cp "$MIGRATION" "$bundle/apply_post2.py"
-          cp forkroom-post2/apply_post2.py.sha256 "$bundle/"
-          cp "$MIGRATION_FIX" "$bundle/apply_post2_fix.py"
-          cp forkroom-post2/apply_post2_fix.py.sha256 "$bundle/"
-          cp "$RUNNER_TEMP/npm-ci-audit.log" "$bundle/NPM_CI_AUDIT.txt"
-          cp "$RUNNER_TEMP/npm-dependency-tree.json" "$bundle/NPM_DEPENDENCY_TREE.json"
-          cp "$RUNNER_TEMP/live/PUBLICATION_RECEIPT.txt" "$bundle/"
-          cat > "$bundle/RELEASE_RECEIPT.txt" <<EOF
-          ForkRoom v1.1.0-post.2 release receipt
-          Base source commit: 1b2ee8fd3589c2b438f9760248ef631f552b4e4e
-          Candidate source commit: $CANDIDATE_SHA
-          Verification workflow: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
-          Tool count: 17
-          Read-only tools: 9
-          Proposal-staging tools: 7
-          Navigation tools: 1
-          Consequential tools: 0
-          Deterministic tests: 45
-          Dependency install audit: 0 vulnerabilities
-          Result: migration checksums, lockfile audit, strict boundary typecheck, contract audit, lint, tests, build, standalone parse, and standalone boot passed
-          EOF
-          (
-            cd "$bundle"
-            find . -type f ! -name SHA256SUMS.txt -print0 \
-              | LC_ALL=C sort -z \
-              | xargs -0 sha256sum > SHA256SUMS.txt
-          )
-          (
-            cd "$(dirname "$bundle")"
-            zip -X -q -r "$output/$RELEASE_NAME-verified.zip" "$RELEASE_NAME"
-          )
-          (
-            cd "$output"
-            sha256sum "$RELEASE_NAME-verified.zip" > "$RELEASE_NAME-verified.zip.sha256"
-          )
-          verify="$(mktemp -d)"
-          cp "$output/$RELEASE_NAME-verified.zip" "$output/$RELEASE_NAME-verified.zip.sha256" "$verify/"
-          (
-            cd "$verify"
-            sha256sum --check "$RELEASE_NAME-verified.zip.sha256"
-            unzip -q "$RELEASE_NAME-verified.zip"
-            cd "$RELEASE_NAME"
-            sha256sum --check SHA256SUMS.txt
-            sha256sum --check apply_post2.py.sha256
-            sha256sum --check apply_post2_fix.py.sha256
-            grep -q "$CANDIDATE_SHA" RELEASE_RECEIPT.txt
-            grep -Eq 'found 0 vulnerabilities|0 vulnerabilities' NPM_CI_AUDIT.txt
-            grep -q 'forkroom_verify_workspace' build/standalone.html
-          )
-          echo "OUTPUT=$output" >> "$GITHUB_ENV"
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash forkroom-post2/release_post2.sh
 
       - name: Upload verified release artifact
         uses: actions/upload-artifact@v6
         with:
           name: ForkRoom-v1.1.0-post.2-verified
           path: |
-            ${{ env.OUTPUT }}/ForkRoom-v1.1.0-post.2-verified.zip
-            ${{ env.OUTPUT }}/ForkRoom-v1.1.0-post.2-verified.zip.sha256
+            forkroom-post2/output/ForkRoom-v1.1.0-post.2-verified.zip
+            forkroom-post2/output/ForkRoom-v1.1.0-post.2-verified.zip.sha256
+            forkroom-post2/output/POST2_SUMMARY.md
           if-no-files-found: error
           retention-days: 90
