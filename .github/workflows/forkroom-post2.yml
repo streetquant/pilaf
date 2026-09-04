@@ -35,7 +35,7 @@ jobs:
         with:
           node-version: 24
 
-      - name: Reconstruct and verify deterministic migration
+      - name: Reconstruct and verify deterministic migrations
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/migration"
@@ -44,12 +44,16 @@ jobs:
             | base64 --decode \
             | xz --decompress > "$work/apply_post2.py"
           cp forkroom-post2/apply_post2.py.sha256 "$work/"
+          cp forkroom-post2/apply_post2_fix.py "$work/"
+          cp forkroom-post2/apply_post2_fix.py.sha256 "$work/"
           (
             cd "$work"
             sha256sum --check apply_post2.py.sha256
-            python -m py_compile apply_post2.py
+            sha256sum --check apply_post2_fix.py.sha256
+            python -m py_compile apply_post2.py apply_post2_fix.py
           )
           echo "MIGRATION=$work/apply_post2.py" >> "$GITHUB_ENV"
+          echo "MIGRATION_FIX=$work/apply_post2_fix.py" >> "$GITHUB_ENV"
 
       - name: Clone the verified post.1 source
         run: |
@@ -63,6 +67,7 @@ jobs:
         run: |
           set -euo pipefail
           python "$MIGRATION" candidate
+          python "$MIGRATION_FIX" candidate
           test "$(node -p "require('./candidate/package.json').version")" = '1.1.0-post.2'
           git -C candidate diff --check
 
@@ -74,6 +79,25 @@ jobs:
           grep -Eq 'found 0 vulnerabilities|0 vulnerabilities' "$RUNNER_TEMP/npm-ci-audit.log"
           npm ls --all --json > "$RUNNER_TEMP/npm-dependency-tree.json"
           test -s "$RUNNER_TEMP/npm-dependency-tree.json"
+
+      - name: Typecheck domain and WebMCP boundary
+        working-directory: candidate
+        run: |
+          npx tsc --noEmit \
+            --target ES2022 \
+            --module ESNext \
+            --moduleResolution Bundler \
+            --strict \
+            --skipLibCheck \
+            --lib ES2022,DOM \
+            src/domain/types.ts \
+            src/domain/analysis.ts \
+            src/domain/demo.ts \
+            src/domain/integrity.ts \
+            src/domain/validation.ts \
+            src/domain/reducer.ts \
+            src/webmcp/webmcp.d.ts \
+            src/webmcp/protocol.ts
 
       - name: Audit WebMCP authority, result, and integrity contracts
         working-directory: candidate
@@ -125,6 +149,7 @@ jobs:
           test "$(grep -c 'based_on_model_digest' src/webmcp/protocol.ts)" -ge '1'
           grep -q "content: \[{ type: 'text', text }\]" src/webmcp/protocol.ts
           grep -q "consequentialHint: false" src/webmcp/protocol.ts
+          grep -q 'const hash: number\[\]' src/domain/integrity.ts
           grep -q 'forkroom:canonical-model:v1' src/domain/integrity.ts
           grep -q 'forkroom:review-workspace:v1' src/domain/integrity.ts
           grep -q 'Canonical model changed after this proposal was staged' src/domain/reducer.ts
@@ -189,6 +214,8 @@ jobs:
           cp -a candidate/dist/. "$bundle/build/"
           cp "$MIGRATION" "$bundle/apply_post2.py"
           cp forkroom-post2/apply_post2.py.sha256 "$bundle/"
+          cp "$MIGRATION_FIX" "$bundle/apply_post2_fix.py"
+          cp forkroom-post2/apply_post2_fix.py.sha256 "$bundle/"
           cp "$RUNNER_TEMP/npm-ci-audit.log" "$bundle/NPM_CI_AUDIT.txt"
           cp "$RUNNER_TEMP/npm-dependency-tree.json" "$bundle/NPM_DEPENDENCY_TREE.json"
           cp "$RUNNER_TEMP/live/PUBLICATION_RECEIPT.txt" "$bundle/"
@@ -204,7 +231,7 @@ jobs:
           Consequential tools: 0
           Deterministic tests: 45
           Dependency install audit: 0 vulnerabilities
-          Result: lockfile install audit, contract audit, lint, tests, build, standalone parse, and standalone boot passed
+          Result: migration checksums, lockfile audit, strict boundary typecheck, contract audit, lint, tests, build, standalone parse, and standalone boot passed
           EOF
           (
             cd "$bundle"
@@ -228,6 +255,8 @@ jobs:
             unzip -q "$RELEASE_NAME-verified.zip"
             cd "$RELEASE_NAME"
             sha256sum --check SHA256SUMS.txt
+            sha256sum --check apply_post2.py.sha256
+            sha256sum --check apply_post2_fix.py.sha256
             grep -q "$CANDIDATE_SHA" RELEASE_RECEIPT.txt
             grep -Eq 'found 0 vulnerabilities|0 vulnerabilities' NPM_CI_AUDIT.txt
             grep -q 'forkroom_verify_workspace' build/standalone.html
