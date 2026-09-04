@@ -11,10 +11,11 @@ text = path.read_text(encoding='utf-8')
 old = '''    --module CommonJS \\
     --moduleResolution Node \\
 '''
-new = '''    --module Node16 \\
-    --moduleResolution Node16 \\
+new = '''    --module CommonJS \\
+    --moduleResolution Node \\
+    --ignoreDeprecations 6.0 \\
 '''
 if text.count(old) != 1:
     raise RuntimeError(f'{path}: expected one Node module-resolution anchor, found {text.count(old)}')
 path.write_text(text.replace(old, new, 1), encoding='utf-8')
-print('Updated SHA-256 cross-check compilation to TypeScript Node16 semantics.')
+print('Updated SHA-256 cross-check compilation for TypeScript 6 node10 deprecation handling.')
