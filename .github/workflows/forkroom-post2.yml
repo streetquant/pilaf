@@ -31,19 +31,27 @@ jobs:
         with:
           node-version: 24
 
-      - name: Verify release-program integrity and syntax
+      - name: Verify and migrate the release program
         run: |
           set -euo pipefail
           (
             cd forkroom-post2
             sha256sum --check release_post2.sh.sha256
+            sha256sum --check fix_release_post2.py.sha256
+            python -m py_compile fix_release_post2.py
           )
-          bash -n forkroom-post2/release_post2.sh
+          cp forkroom-post2/release_post2.sh "$RUNNER_TEMP/release_post2.sh"
+          python forkroom-post2/fix_release_post2.py "$RUNNER_TEMP/release_post2.sh"
+          printf '%s  %s\n' \
+            '62419e3f12ac41b2deee9829a66a4a1b10f04e4fd116174e41c2a5887de95209' \
+            "$RUNNER_TEMP/release_post2.sh" \
+            | sha256sum --check
+          bash -n "$RUNNER_TEMP/release_post2.sh"
 
       - name: Run reproducible release program
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: bash forkroom-post2/release_post2.sh
+        run: bash "$RUNNER_TEMP/release_post2.sh"
 
       - name: Upload verified release artifact
         uses: actions/upload-artifact@v6
