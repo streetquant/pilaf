@@ -66,13 +66,14 @@ jobs:
           test "$(node -p "require('./candidate/package.json').version")" = '1.1.0-post.2'
           git -C candidate diff --check
 
-      - name: Install exact dependencies
+      - name: Install exact dependencies and assert audit receipt
         working-directory: candidate
-        run: npm ci
-
-      - name: Audit dependency advisories
-        working-directory: candidate
-        run: npm audit --audit-level=high
+        run: |
+          set -euo pipefail
+          npm ci --audit=true --audit-level=high 2>&1 | tee "$RUNNER_TEMP/npm-ci-audit.log"
+          grep -Eq 'found 0 vulnerabilities|0 vulnerabilities' "$RUNNER_TEMP/npm-ci-audit.log"
+          npm ls --all --json > "$RUNNER_TEMP/npm-dependency-tree.json"
+          test -s "$RUNNER_TEMP/npm-dependency-tree.json"
 
       - name: Audit WebMCP authority, result, and integrity contracts
         working-directory: candidate
@@ -164,6 +165,7 @@ jobs:
           Verification run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
           WebMCP tools: 17
           Deterministic tests: 45
+          Dependency install audit: 0 vulnerabilities
           Result contract: structured content text envelope
           Integrity: domain-separated SHA-256 model and review digests
           Human authority: proposal approval unavailable to WebMCP tools
@@ -187,6 +189,8 @@ jobs:
           cp -a candidate/dist/. "$bundle/build/"
           cp "$MIGRATION" "$bundle/apply_post2.py"
           cp forkroom-post2/apply_post2.py.sha256 "$bundle/"
+          cp "$RUNNER_TEMP/npm-ci-audit.log" "$bundle/NPM_CI_AUDIT.txt"
+          cp "$RUNNER_TEMP/npm-dependency-tree.json" "$bundle/NPM_DEPENDENCY_TREE.json"
           cp "$RUNNER_TEMP/live/PUBLICATION_RECEIPT.txt" "$bundle/"
           cat > "$bundle/RELEASE_RECEIPT.txt" <<EOF
           ForkRoom v1.1.0-post.2 release receipt
@@ -199,7 +203,8 @@ jobs:
           Navigation tools: 1
           Consequential tools: 0
           Deterministic tests: 45
-          Result: audit, dependency check, lint, tests, build, standalone parse, and standalone boot passed
+          Dependency install audit: 0 vulnerabilities
+          Result: lockfile install audit, contract audit, lint, tests, build, standalone parse, and standalone boot passed
           EOF
           (
             cd "$bundle"
@@ -224,6 +229,7 @@ jobs:
             cd "$RELEASE_NAME"
             sha256sum --check SHA256SUMS.txt
             grep -q "$CANDIDATE_SHA" RELEASE_RECEIPT.txt
+            grep -Eq 'found 0 vulnerabilities|0 vulnerabilities' NPM_CI_AUDIT.txt
             grep -q 'forkroom_verify_workspace' build/standalone.html
           )
           echo "OUTPUT=$output" >> "$GITHUB_ENV"
