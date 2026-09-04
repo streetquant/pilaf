@@ -43,7 +43,7 @@ jobs:
           cp forkroom-post2/release_post2.sh "$RUNNER_TEMP/release_post2.sh"
           python forkroom-post2/fix_release_post2.py "$RUNNER_TEMP/release_post2.sh"
           printf '%s  %s\n' \
-            '6b22a8522852522bb950e0f8da5035a74568ed218993064e0a7be02cba804ad3' \
+            'b09bc4f2e91a328027dea24333d4523b43d6e228f02ed6a27eff8a98754fe123' \
             "$RUNNER_TEMP/release_post2.sh" \
             | sha256sum --check
           bash -n "$RUNNER_TEMP/release_post2.sh"
